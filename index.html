@@ -293,14 +293,6 @@
             let uploadedImages = [];
             let processedImages = [];
 
-            // Configuración por defecto
-            const config = {
-                output_size: 1080,
-                margin: 0.1,
-                amplification_factor: 1.2,
-                background_color: [255, 255, 255]
-            };
-
             // Event listeners para la zona de upload
             uploadArea.addEventListener('click', () => {
                 fileInput.click();
@@ -476,11 +468,14 @@
                             // Convertir a blob
                             const blob = new Blob([processedBuffer], { type: 'image/png' });
                             
+                            // Redimensionar a 1080x1080
+                            const resizedBlob = await resizeImage(blob, 1080, 1080);
+                            
                             // Crear objeto de imagen procesada
                             processedImages.push({
-                                blob: blob,
-                                url: URL.createObjectURL(blob),
-                                name: `procesada_${imageData.name}`
+                                blob: resizedBlob,
+                                url: URL.createObjectURL(resizedBlob),
+                                name: `procesada_${imageData.name.split('.')[0]}.png`
                             });
                             
                             showStatus(`Procesando imagen ${i+1} de ${uploadedImages.length}... <span class="loading"></span>`);
@@ -511,7 +506,7 @@
                     
                 } catch (error) {
                     console.error('Error en el procesamiento:', error);
-                    showStatus('Error al procesar las imágenes', 'error');
+                    showStatus('Error al procesar las imágenes: ' + error.message, 'error');
                     processBtn.disabled = false;
                 } finally {
                     setTimeout(() => {
@@ -544,6 +539,53 @@
                     console.error('Error en removeBackground:', error);
                     throw error;
                 }
+            }
+
+            // Función para redimensionar imagen
+            function resizeImage(blob, width, height) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Mantener relación de aspecto y centrar
+                        const imgAspect = img.width / img.height;
+                        const targetAspect = width / height;
+                        
+                        let drawWidth, drawHeight, offsetX, offsetY;
+                        
+                        if (imgAspect > targetAspect) {
+                            // Imagen más ancha
+                            drawHeight = height;
+                            drawWidth = height * imgAspect;
+                            offsetX = (width - drawWidth) / 2;
+                            offsetY = 0;
+                        } else {
+                            // Imagen más alta
+                            drawWidth = width;
+                            drawHeight = width / imgAspect;
+                            offsetX = 0;
+                            offsetY = (height - drawHeight) / 2;
+                        }
+                        
+                        // Dibujar la imagen en el canvas
+                        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                        
+                        // Convertir a blob
+                        canvas.toBlob(resolvedBlob => {
+                            if (resolvedBlob) {
+                                resolve(resolvedBlob);
+                            } else {
+                                reject(new Error('Error al convertir canvas a blob'));
+                            }
+                        }, 'image/png', 0.9);
+                    };
+                    img.onerror = reject;
+                    img.src = URL.createObjectURL(blob);
+                });
             }
 
             // Función para descargar todas las imágenes procesadas
